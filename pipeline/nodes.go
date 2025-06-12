@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -27,27 +28,32 @@ func NewFilePathSource(dir string) *FilePathSource {
 }
 
 func (n *FilePathSource) Run(ctx context.Context) error {
-	defer close(n.out)
-	_ = filepath.Walk(n.Dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // пропускаем ошибки
-		}
+	fmt.Println("FilePathSource started")
+	fmt.Println("FilePathSource: Dir =", n.Dir)
+	files, err := ioutil.ReadDir(n.Dir)
+	if err != nil {
+		fmt.Println("ReadDir error:", err)
+		close(n.out)
+		return err
+	}
+	for _, f := range files {
+		fullPath := filepath.Join(n.Dir, f.Name())
 		select {
-		case <-n.stop:
-			return fmt.Errorf("stopped")
+		case n.out <- fullPath:
+			fmt.Println("FilePathSource отправил:", fullPath)
 		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			if !info.IsDir() {
-				n.out <- path
-			}
+			fmt.Println("FilePathSource: ctx.Done")
+			close(n.out)
+			return nil
 		}
-		return nil
-	})
+	}
+	fmt.Println("FilePathSource: Закрываю out")
+	close(n.out)
 	return nil
 }
+
 func (n *FilePathSource) In() []chan interface{} {
-	return nil
+	return []chan interface{}{}
 }
 
 func (n *FilePathSource) Out() []chan interface{} {
@@ -141,17 +147,21 @@ func NewPrinter() *Printer {
 	}
 }
 func (n *Printer) Run(ctx context.Context) error {
+	fmt.Println("Printer started")
 	for {
 		select {
 		case <-ctx.Done():
+			fmt.Println("Printer: ctx.Done")
 			return nil
 		case <-n.stop:
+			fmt.Println("Printer: stopped")
 			return nil
 		case v, ok := <-n.in:
 			if !ok {
+				fmt.Println("Printer: in закрыт")
 				return nil
 			}
-			fmt.Println(v)
+			fmt.Println("Printer:", v)
 		}
 	}
 }
@@ -161,7 +171,7 @@ func (n *Printer) In() []chan interface{} {
 }
 
 func (n *Printer) Out() []chan interface{} {
-	return nil
+	return []chan interface{}{}
 }
 
 func (n *Printer) Stop() {

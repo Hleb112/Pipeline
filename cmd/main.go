@@ -4,6 +4,8 @@ import (
 	"Pipe-Lib/pipeline"
 	"context"
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +13,8 @@ import (
 
 func main() {
 	dir := flag.String("dir", ".", "Путь к директории")
+	fmt.Println("DIR:", *dir, "FILES:", fileCount(*dir))
+
 	workers := flag.Int("workers", 10, "Степень параллелизма")
 	flag.Parse()
 
@@ -27,5 +31,18 @@ func main() {
 	defer stop()
 
 	p.Start(ctx)
+
+	// Ждём сигнала завершения (Ctrl+C) или завершения pipeline
+	<-ctx.Done()
+	fmt.Println("Остановка по сигналу")
 	p.Stop()
+
+}
+
+func fileCount(dir string) int {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	return len(files)
 }
